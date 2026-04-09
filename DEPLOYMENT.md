@@ -92,13 +92,14 @@ kubectl get pods -l app=login-app
 
 ## 6. Access the Application
 
-The application is exposed through a NodePort service on port 30080:
+The application is exposed through a NodePort service on port 30080. You can access it from either node:
 
 ```
-http://10.34.7.115:30080
+http://10.34.7.115:30080  (Master node)
+http://10.34.7.5:30080    (Worker node)
 ```
 
-Replace `10.34.7.115` with your Kubernetes node IP address.
+Both URLs work from any machine on your local network (10.34.7.0/24).
 
 ## 7. Testing the Application
 
@@ -108,7 +109,25 @@ Replace `10.34.7.115` with your Kubernetes node IP address.
    - Password: `admin123`
 3. After login, you'll be redirected to the dashboard where you can upload images
 
-## 8. Troubleshooting
+## 8. Important: Calico Networking Configuration
+
+The cluster uses Calico CNI with VXLAN. If you experience networking issues between nodes, ensure Calico is configured to detect the correct network interface:
+
+```bash
+# Fix Calico IP detection to use the correct interface
+kubectl set env daemonset/calico-node -n calico-system IP_AUTODETECTION_METHOD=can-reach=10.34.7.115
+
+# Restart calico-node pods to apply changes
+kubectl delete pod -n calico-system -l k8s-app=calico-node
+
+# Wait for calico-node pods to be ready
+kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n calico-system --timeout=180s
+
+# Verify correct IPs are detected on all nodes
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.projectcalico\.org/IPv4Address}{"\n"}{end}'
+```
+
+## 9. Troubleshooting
 
 If you encounter issues:
 
@@ -127,9 +146,18 @@ kubectl exec -it $(kubectl get pod -l app=login-app -o jsonpath='{.items[0].meta
 
 # Check service configuration
 kubectl get svc
+
+# If database connection fails, restart login-app deployment
+kubectl rollout restart deployment login-app
+
+# Test DNS resolution from login-app pod
+kubectl exec -it $(kubectl get pods -l app=login-app -o name | head -1) -- nslookup mysql
+
+# Check Calico networking status
+kubectl get pods -n calico-system
 ```
 
-## 9. Database Management
+## 10. Database Management
 
 To manually manage the database:
 
@@ -144,6 +172,21 @@ USE loginapp;
 SHOW TABLES;
 SELECT * FROM users;
 ```
+
+## 11. Accessing the Application
+
+### Login Application
+- **URL**: http://10.34.7.115:30080 or http://10.34.7.5:30080
+- **Default Credentials**: 
+  - Username: `admin`
+  - Password: `admin123`
+
+### Kubernetes Dashboard
+- **URL**: https://10.34.7.115:30119 or https://10.34.7.5:30119
+- **Access Token**: Generate with:
+  ```bash
+  kubectl create token widhi -n kube-system --duration=24h
+  ```
 
 This completes the deployment of the login web application with MySQL on Kubernetes.
 ```

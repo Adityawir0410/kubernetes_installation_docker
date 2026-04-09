@@ -7,16 +7,13 @@ Here is an Ansible playbook to automate the deployment process for your applicat
   hosts: localhost
   become: false
   vars:
-    git_repo: https://github.com/yourusername/k8s-login-app.git
+    git_repo: https://github.com/Widhi-yahya/kubernetes_installation_docker.git
     git_branch: main
-    app_dir: "{{ playbook_dir }}/k8s-login-app"
+    app_dir: "{{ playbook_dir }}"
     worker_nodes:
-      - name: worker1
-        user: ubuntu
-        ip: 10.34.7.X  # Replace with actual worker IP
-      - name: worker2
-        user: ubuntu
-        ip: 10.34.7.Y  # Replace with actual worker IP
+      - name: k8s-control
+        user: widhi
+        ip: 10.34.7.5
     master_node_ip: 10.34.7.115
 
   tasks:
@@ -173,6 +170,30 @@ Here is an Ansible playbook to automate the deployment process for your applicat
         executable: /bin/bash
       ignore_errors: true
 
+    - name: Configure Calico networking for correct IP detection
+      shell: |
+        # Fix Calico IP detection to use the correct network interface
+        kubectl set env daemonset/calico-node -n calico-system IP_AUTODETECTION_METHOD=can-reach={{ master_node_ip }}
+        
+        # Restart calico-node pods to apply changes
+        kubectl delete pod -n calico-system -l k8s-app=calico-node
+        
+        # Wait for calico-node pods to be ready
+        kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n calico-system --timeout=180s
+      args:
+        executable: /bin/bash
+      ignore_errors: true
+
+    - name: Restart login-app deployment for DNS fix
+      shell: |
+        # Restart deployment to ensure proper DNS resolution
+        kubectl rollout restart deployment login-app
+        
+        # Wait for rollout to complete
+        kubectl rollout status deployment login-app --timeout=180s
+      args:
+        executable: /bin/bash
+
     - name: Display access information
       debug:
         msg: |
@@ -208,10 +229,10 @@ Here is an Ansible playbook to automate the deployment process for your applicat
 
 1. Save the above playbook as `ansible-deploy.yml`
 
-2. Update the variables at the top of the playbook:
-   - `git_repo`: Update with your actual Git repository URL
-   - `worker_nodes`: Replace with the actual IPs and usernames for your worker nodes 
-   - `master_node_ip`: Replace with your master node IP
+2. The variables are already set for your current cluster:
+   - `git_repo`: https://github.com/Widhi-yahya/kubernetes_installation_docker.git
+   - `worker_nodes`: k8s-control (10.34.7.5) with user widhi
+   - `master_node_ip`: 10.34.7.115
 
 3. Install required Ansible modules:
    ```bash
@@ -224,7 +245,12 @@ Here is an Ansible playbook to automate the deployment process for your applicat
    pip install ansible
    ```
 
-5. Run the playbook:
+5. Set up SSH key-based authentication to worker node:
+   ```bash
+   ssh-copy-id widhi@10.34.7.5
+   ```
+
+6. Run the playbook:
    ```bash
    ansible-playbook ansible-deploy.yml
    ```
@@ -232,10 +258,11 @@ Here is an Ansible playbook to automate the deployment process for your applicat
 ## Prerequisites
 
 1. Ansible installed on the control machine
-2. SSH access to worker nodes with passwordless authentication set up
-3. kubectl configured on the machine where Ansible runs
+2. SSH access to worker nodes with passwordless authentication (SSH keys)
+3. kubectl configured on the control plane (kube-master)
 4. Helm installed for the load balancer deployment
 5. Docker installed on all machines
+6. Calico CNI installed and configured
 
 ## Customizing the Deployment
 
@@ -244,4 +271,57 @@ Here is an Ansible playbook to automate the deployment process for your applicat
 3. Modify the Docker build process if you need additional steps
 4. Adjust the kubernetes wait timeouts if needed
 
-This Ansible playbook automates the entire deployment process, including building and distributing Docker images, setting up the database, and configuring the load balancer.
+## Access Information
+
+After successful deployment:
+
+### Login Application
+- **Standard access**: http://10.34.7.115:30080 or http://10.34.7.5:30080
+- **Load balanced access**: http://10.34.7.115:30081 or http://10.34.7.5:30081
+- **Credentials**: 
+  - Username: `admin`
+  - Password: `admin123`
+
+### Kubernetes Dashboard
+- **URL**: https://10.34.7.115:30119 or https://10.34.7.5:30119
+- **Access Token**: Generate with:
+  ```bash
+  kubectl create token widhi -n kube-system --duration=24h
+  ```
+
+## Troubleshooting
+
+### Check deployment status:
+```bash
+# Check all pods
+kubectl get pods
+
+# Check login-app logs
+kubectl logs -l app=login-app
+
+# Check MySQL logs
+kubectl logs -l app=mysql
+
+# Check Calico networking
+kubectl get pods -n calico-system
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.projectcalico\.org/IPv4Address}{"\n"}{end}'
+```
+
+### If database connection fails:
+```bash
+# Restart login-app deployment
+kubectl rollout restart deployment login-app
+
+# Check DNS resolution
+kubectl exec -it $(kubectl get pods -l app=login-app -o name | head -1) -- nslookup mysql
+```
+
+### If networking issues persist:
+```bash
+# Verify Calico IP detection
+kubectl set env daemonset/calico-node -n calico-system IP_AUTODETECTION_METHOD=can-reach=10.34.7.115
+kubectl delete pod -n calico-system -l k8s-app=calico-node
+kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n calico-system --timeout=180s
+```
+
+This Ansible playbook automates the entire deployment process, including building and distributing Docker images, setting up the database, configuring networking, and setting up the load balancer.
