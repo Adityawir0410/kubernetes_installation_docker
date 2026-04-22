@@ -1,4 +1,43 @@
-﻿# Kubernetes Installation on Ubuntu 22.04/24.04
+# Laporan Tugas 3: Deployment K8s Login App
+
+**Anggota Kelompok:**
+1. Ahmad Adzka Najhan (235150200111037)
+2. Ananda Fifadlika (235150207111045)
+3. Anak Agung Ngurah Aditya Wirayudha (235150207111067)
+
+---
+
+## 📌 Deskripsi Proyek
+Repositori ini berisi dokumentasi hasil pengerjaan Tugas 3, yaitu melakukan *deployment* aplikasi berbasis Node.js (Login App) dan database MySQL ke dalam klaster Kubernetes. 
+
+Klaster ini di-*setup* secara terdistribusi menggunakan mesin virtual (WSL) dengan arsitektur sebagai berikut:
+* **1 Master Node:** Mengatur Control Plane K8S dan mendistribusikan beban kerja (*workload*).
+* **2 Worker Node:** Tempat berjalannya *pods* aplikasi web dan database.
+* **Networking:** Terhubung menggunakan VPN Tailscale untuk *bridging* jaringan IP lokal antar-node.
+
+---
+
+## 🚀 Hasil Eksekusi & Bukti Deployment
+
+Berikut adalah bukti bahwa aplikasi telah berhasil di-*build*, didistribusikan (*load image*), dan dijalankan (*running*) di dalam klaster Kubernetes.
+
+### 1. Status K8s Pods & Service (Terminal)
+Aplikasi web (`login-app`) telah berhasil dijalankan dan secara otomatis membagi beban (*load balancing*) ke Worker 1 dan Worker 2. Database MySQL juga berjalan stabil di Worker Node. Akses publik dibuka melalui tipe servis `NodePort` pada port `30080`.
+
+<img width="1358" height="107" alt="image" src="https://github.com/user-attachments/assets/e4c03c44-4627-42df-966a-ec2ac8cac1fa" />
+
+
+### 2. Akses Aplikasi Melalui Browser
+Aplikasi Node.js berhasil diakses dari luar klaster melalui browser dengan memanggil IP Address Worker Node / Master Node (via jaringan Tailscale) yang diikuti dengan port `30080`.
+
+<img width="1600" height="849" alt="image" src="https://github.com/user-attachments/assets/b0ad2d88-1070-4b70-a92e-76b9bcd19117" />
+
+---
+*Tugas diselesaikan dengan metode Remote SSH dan Port-Forwarding / VPN Tunneling.*
+
+ 
+ 
+ # Kubernetes Installation on Ubuntu 22.04/24.04
 
 Get the detailed information about the installation from the below-mentioned websites of **Docker** and **Kubernetes**.
 
